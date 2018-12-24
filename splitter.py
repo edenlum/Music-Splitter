@@ -1,46 +1,82 @@
-import wave
-import scipy.io.wavfile as w
-import matplotlib.pyplot as plt
-import librosa
+import keras
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv2D, MaxPooling2D
 import numpy as np
-from os import listdir, path
+from load import loader
 
-data = [f for f in listdir('nsynth-test/audio')]
-inputs = [librosa.load(f.path) for f in data]
-print(inputs)
+training_data, val_data, test_data = loader('newdataset.pickle')
 
-x = wave.open("cartoon001.wav",mode='rb')
-print(x.getnchannels(),x.getframerate(),x.getnframes())
-x.readframes(10000)
-fs,y = w.read('cartoon001.wav')
-print(y.size)
-print(fs)
+x_train, y_train = zip(*training_data)
+x_val, y_val = zip(*val_data)
+x_test, y_test = zip(*test_data)
 
-#returns the number of seconds of the audio file
-def seconds(sample, samplerate):
-    return sample.size/samplerate
+#converting x to numpy array
+x_train = np.asarray(x_train)
+x_val = np.asarray(x_val)
+x_test = np.asarray(x_test)
+#check the dimensions of the dataset
 
-#plots the audio file with respect to seconds
-def plot_sec(sample, samplerate):
-    t = np.arange(sample.size)/float(samplerate)
-    plt.plot(t,sample)
-    plt.show()
+print(np.shape(x_train))#2633, 96, 173
+print(np.shape(x_test))#330, 96, 173
+print(np.shape(y_train))#2633,
 
-#plots the audio file with respect to sample size
-def plot_normal(sample):
-    plt.plot(sample)
-    plt.show()
+#checks how many families we have (10 from 0 to 10 exluding 9 (doesnt exist in this dataset))
 
-x=y[0:20000]
-w.write('short.wav', fs, x)
+list_of_names = []
+for y in y_train:
+    for name in list_of_names:
+        if (name == y):
+            break
+    else:
+        list_of_names.append(y)
+    continue
 
-z=np.floor_divide(y,1000)
-w.write('quite.wav', fs, z)
+print("number of names: " + str(len(list_of_names)))
+#the cnn code
 
-x,sr = librosa.load('cartoon001.wav')
-S = np.abs(librosa.stft(x))
-print(S)
-import librosa.display as display
-display.specshow(librosa.power_to_db(S**2, ref=np.max), sr=sr, y_axis = 'log', x_axis='time')
-plt.tight_layout()
-plt.show()
+batch_size = 1024
+num_classes = len(list_of_names) + 1 #9 is missing so we add 1
+epochs = 200
+
+# input image dimensions
+img_rows, img_cols = np.shape(x_train)[1], np.shape(x_train)[2]
+
+x_train = x_train.reshape(np.shape(x_train)[0],img_rows, img_cols, 1)
+x_val = x_val.reshape(np.shape(x_val)[0], img_rows, img_cols, 1)
+x_test = x_test.reshape(np.shape(x_test)[0],img_rows, img_cols, 1)
+
+print('x_train shape:', x_train.shape)
+print(x_train.shape[0], 'train samples')
+print(x_test.shape[0], 'test samples')
+
+# convert class vectors to binary class matrices
+y_train = keras.utils.to_categorical(y_train, num_classes)
+y_val = keras.utils.to_categorical(y_val, num_classes)
+y_test = keras.utils.to_categorical(y_test, num_classes)
+
+# model = Sequential()
+# model.add(Conv2D(128, kernel_size=(10, img_cols),
+#                  activation='relu',
+#                  input_shape=(img_rows,img_cols,1)))
+# model.add(MaxPooling2D(pool_size=(5,1)))
+# model.add(Flatten())
+# model.add(Dense(11, activation='softmax'))
+#
+# model.compile(loss=keras.losses.categorical_crossentropy,
+#               optimizer=keras.optimizers.adam(),
+#               metrics=['accuracy'])
+# keras.utils.print_summary(model)
+# model.fit(x_train, y_train,
+#           batch_size=batch_size,
+#           epochs=epochs,
+#           verbose=1,
+#           validation_data=(x_val, y_val))
+
+model = keras.models.load_model('simple_model.h5')
+
+score = model.evaluate(x_train, y_train, verbose=0)
+print('Test loss:', score[0])
+print('Test accuracy:', score[1])
+
+model.save('simple_model.h5')  # creates a HDF5 file 'my_model.h5'
